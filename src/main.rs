@@ -20,9 +20,12 @@ async fn main() -> Result<()> {
 
 // Parse selectors once at the top-level, outside of async context
 lazy_static! {
-    static ref QUOTE_SELECTOR: Selector = Selector::parse("div.quote").unwrap();
-    static ref TEXT_SELECTOR: Selector = Selector::parse("span.text").unwrap();
-    static ref AUTHOR_SELECTOR: Selector = Selector::parse("small.author").unwrap();
+    static ref QUOTE_SELECTOR: Selector =
+        Selector::parse("div.quote").expect("Failed to parse quote selector");
+    static ref TEXT_SELECTOR: Selector =
+        Selector::parse("span.text").expect("Failed to parse text selector");
+    static ref AUTHOR_SELECTOR: Selector =
+        Selector::parse("small.author").expect("Failed to parse author selector");
 }
 
 async fn scrape_quotes(url: &str) -> Result<Vec<(String, String)>> {
@@ -39,23 +42,22 @@ async fn scrape_quotes(url: &str) -> Result<Vec<(String, String)>> {
     let body = res.text().await?;
     let document = Html::parse_document(&body);
 
-    let mut quotes = Vec::new();
-
-    for element in document.select(&*QUOTE_SELECTOR) {
-        let quote_text = element
-            .select(&*TEXT_SELECTOR)
-            .next()
-            .map(|e| e.text().collect::<String>())
-            .unwrap_or_else(|| "No quote text found".to_string());
-
-        let author_text = element
-            .select(&*AUTHOR_SELECTOR)
-            .next()
-            .map(|e| e.text().collect::<String>())
-            .unwrap_or_else(|| "No author found".to_string());
-
-        quotes.push((quote_text, author_text));
-    }
+    let quotes: Vec<(String, String)> = document
+        .select(&*QUOTE_SELECTOR)
+        .filter_map(|element| {
+            let quote_text = element
+                .select(&*TEXT_SELECTOR)
+                .next()?
+                .text()
+                .collect::<String>();
+            let author_text = element
+                .select(&*AUTHOR_SELECTOR)
+                .next()?
+                .text()
+                .collect::<String>();
+            Some((quote_text, author_text))
+        })
+        .collect();
 
     Ok(quotes)
 }
