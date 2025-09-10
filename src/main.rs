@@ -1,4 +1,5 @@
 use anyhow::Result;
+use lazy_static::lazy_static;
 use reqwest;
 use scraper::{Html, Selector};
 use tokio;
@@ -17,6 +18,13 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+// Parse selectors once at the top-level, outside of async context
+lazy_static! {
+    static ref QUOTE_SELECTOR: Selector = Selector::parse("div.quote").unwrap();
+    static ref TEXT_SELECTOR: Selector = Selector::parse("span.text").unwrap();
+    static ref AUTHOR_SELECTOR: Selector = Selector::parse("small.author").unwrap();
+}
+
 async fn scrape_quotes(url: &str) -> Result<Vec<(String, String)>> {
     let res = reqwest::get(url).await?;
 
@@ -31,21 +39,17 @@ async fn scrape_quotes(url: &str) -> Result<Vec<(String, String)>> {
     let body = res.text().await?;
     let document = Html::parse_document(&body);
 
-    let quote_selector = Selector::parse("div.quote")?;
-    let text_selector = Selector::parse("span.text")?;
-    let author_selector = Selector::parse("small.author")?;
-
     let mut quotes = Vec::new();
 
-    for element in document.select(&quote_selector) {
+    for element in document.select(&*QUOTE_SELECTOR) {
         let quote_text = element
-            .select(&text_selector)
+            .select(&*TEXT_SELECTOR)
             .next()
             .map(|e| e.text().collect::<String>())
             .unwrap_or_else(|| "No quote text found".to_string());
 
         let author_text = element
-            .select(&author_selector)
+            .select(&*AUTHOR_SELECTOR)
             .next()
             .map(|e| e.text().collect::<String>())
             .unwrap_or_else(|| "No author found".to_string());
