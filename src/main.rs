@@ -5,48 +5,49 @@ use tokio;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Make an asynchronous GET request to the target URL
-    let res = reqwest::get("https://quotes.toscrape.com/").await?;
+    const TARGET_URL: &str = "https://quotes.toscrape.com/";
+    let quotes = scrape_quotes(TARGET_URL).await?;
 
-    // Ensure the request was successful
+    println!("\n--- Scraped Quotes ---\n");
+    for (quote, author) in quotes {
+        println!("\"{}\", - {}", quote.trim(), author.trim());
+    }
+    println!("\n-------------------------\n");
+
+    Ok(())
+}
+
+async fn scrape_quotes(url: &str) -> Result<Vec<(String, String)>> {
+    let res = reqwest::get(url).await?;
+
     if !res.status().is_success() {
-        eprintln!("Failed to fetch the page. Status: {}", res.status());
-        return Ok(());
+        anyhow::bail!("Failed to fetch the page. Status: {}", res.status());
     }
 
-    // Read the response body as text
     let body = res.text().await?;
-
-    // Parse the HTML document
     let document = Html::parse_document(&body);
 
-    // Define selectors for the elements we want to extract
     let quote_selector = Selector::parse("div.quote").unwrap();
     let text_selector = Selector::parse("span.text").unwrap();
     let author_selector = Selector::parse("small.author").unwrap();
 
-    println!("\n--- Scraped Quotes ---\n");
+    let mut quotes = Vec::new();
 
-    // Iterate over each quote element found in the document
     for element in document.select(&quote_selector) {
-        // Extract the text of the quote
         let quote_text = element
             .select(&text_selector)
             .next()
             .map(|e| e.text().collect::<String>())
             .unwrap_or_else(|| "No quote text found".to_string());
 
-        // Extract the author of the quote
         let author_text = element
             .select(&author_selector)
             .next()
             .map(|e| e.text().collect::<String>())
             .unwrap_or_else(|| "No author found".to_string());
 
-        println!("\"{}\", - {}", quote_text.trim(), author_text.trim());
+        quotes.push((quote_text, author_text));
     }
 
-    println!("\n-------------------------\n");
-
-    Ok(())
+    Ok(quotes)
 }
