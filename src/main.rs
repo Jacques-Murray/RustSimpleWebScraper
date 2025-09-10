@@ -21,15 +21,19 @@ async fn scrape_quotes(url: &str) -> Result<Vec<(String, String)>> {
     let res = reqwest::get(url).await?;
 
     if !res.status().is_success() {
-        anyhow::bail!("Failed to fetch the page. Status: {}", res.status());
+        anyhow::bail!(
+            "Failed to fetch the page at '{}'. Status: {}",
+            url,
+            res.status()
+        );
     }
 
     let body = res.text().await?;
     let document = Html::parse_document(&body);
 
-    let quote_selector = Selector::parse("div.quote").unwrap();
-    let text_selector = Selector::parse("span.text").unwrap();
-    let author_selector = Selector::parse("small.author").unwrap();
+    let quote_selector = Selector::parse("div.quote")?;
+    let text_selector = Selector::parse("span.text")?;
+    let author_selector = Selector::parse("small.author")?;
 
     let mut quotes = Vec::new();
 
