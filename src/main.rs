@@ -1,52 +1,63 @@
 use anyhow::Result;
+use lazy_static::lazy_static;
 use reqwest;
 use scraper::{Html, Selector};
 use tokio;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Make an asynchronous GET request to the target URL
-    let res = reqwest::get("https://quotes.toscrape.com/").await?;
-
-    // Ensure the request was successful
-    if !res.status().is_success() {
-        eprintln!("Failed to fetch the page. Status: {}", res.status());
-        return Ok(());
-    }
-
-    // Read the response body as text
-    let body = res.text().await?;
-
-    // Parse the HTML document
-    let document = Html::parse_document(&body);
-
-    // Define selectors for the elements we want to extract
-    let quote_selector = Selector::parse("div.quote").unwrap();
-    let text_selector = Selector::parse("span.text").unwrap();
-    let author_selector = Selector::parse("small.author").unwrap();
+    const TARGET_URL: &str = "https://quotes.toscrape.com/";
+    let quotes = scrape_quotes(TARGET_URL).await?;
 
     println!("\n--- Scraped Quotes ---\n");
-
-    // Iterate over each quote element found in the document
-    for element in document.select(&quote_selector) {
-        // Extract the text of the quote
-        let quote_text = element
-            .select(&text_selector)
-            .next()
-            .map(|e| e.text().collect::<String>())
-            .unwrap_or_else(|| "No quote text found".to_string());
-
-        // Extract the author of the quote
-        let author_text = element
-            .select(&author_selector)
-            .next()
-            .map(|e| e.text().collect::<String>())
-            .unwrap_or_else(|| "No author found".to_string());
-
-        println!("\"{}\", - {}", quote_text.trim(), author_text.trim());
+    for (quote, author) in quotes {
+        println!("\"{}\", - {}", quote.trim(), author.trim());
     }
-
     println!("\n-------------------------\n");
 
     Ok(())
+}
+
+// Parse selectors once at the top-level, outside of async context
+lazy_static! {
+    static ref QUOTE_SELECTOR: Selector =
+        Selector::parse("div.quote").expect("Failed to parse quote selector");
+    static ref TEXT_SELECTOR: Selector =
+        Selector::parse("span.text").expect("Failed to parse text selector");
+    static ref AUTHOR_SELECTOR: Selector =
+        Selector::parse("small.author").expect("Failed to parse author selector");
+}
+
+async fn scrape_quotes(url: &str) -> Result<Vec<(String, String)>> {
+    let res = reqwest::get(url).await?;
+
+    if !res.status().is_success() {
+        anyhow::bail!(
+            "Failed to fetch the page at '{}'. Status: {}",
+            url,
+            res.status()
+        );
+    }
+
+    let body = res.text().await?;
+    let document = Html::parse_document(&body);
+
+    let quotes: Vec<(String, String)> = document
+        .select(&*QUOTE_SELECTOR)
+        .filter_map(|element| {
+            let quote_text = element
+                .select(&*TEXT_SELECTOR)
+                .next()?
+                .text()
+                .collect::<String>();
+            let author_text = element
+                .select(&*AUTHOR_SELECTOR)
+                .next()?
+                .text()
+                .collect::<String>();
+            Some((quote_text, author_text))
+        })
+        .collect();
+
+    Ok(quotes)
 }
