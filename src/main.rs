@@ -1,15 +1,7 @@
-use error_chain::error_chain;
+use anyhow::Result;
 use reqwest;
 use scraper::{Html, Selector};
 use tokio;
-
-// Error chain for cleaner error handling
-error_chain! {
-  foreign_links {
-    ReqError(reqwest::Error);
-    IoError(std::io::Error);
-  }
-}
 
 #[tokio::main]
 async fn main() -> Result<()> {
